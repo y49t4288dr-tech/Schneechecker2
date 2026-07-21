@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Schnee-Checker</title>
+
+<!-- Leaflet (OpenStreetMap-Karte) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  :root {
+    --panel-bg: #1e1e24;
+    --card-bg: #26262e;
+    --fg: #e6e6ea;
+    --muted: #9a9aa5;
+    --accent: #d63a2f;
+    --accent-active: #b8281f;
+    --trough: #3a3a44;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { overflow: hidden; }
+
+  #app { position: fixed; inset: 0; display: flex; }
+  #map { flex: 1 1 auto; height: 100%; background: #e8e4dc; }
+
+  /* Fadenkreuz in der Kartenmitte */
+  #crosshair { position: absolute; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none; z-index: 500; }
+  #crosshair::before, #crosshair::after {
+    content: ""; position: absolute; background: rgba(0,0,0,.45);
+  }
+  #crosshair::before { left: 50%; top: 50%; width: 1px; height: 24px; transform: translate(-50%,-50%); }
+  #crosshair::after  { left: 50%; top: 50%; width: 24px; height: 1px; transform: translate(-50%,-50%); }
+
+  /* Info-Einblendung unten links */
+  #info {
+    position: absolute; left: 10px; bottom: 10px; z-index: 500;
+    background: rgba(0,0,0,.6); color: #fff; padding: 4px 8px;
+    border-radius: 6px; font-size: 12px; pointer-events: none;
+  }
+
+  /* Steuerleiste */
+  #panel {
+    flex: 0 0 300px; background: var(--panel-bg); color: var(--fg);
+    padding: 18px; overflow-y: auto; z-index: 600;
+  }
+  #panel h1 { margin: 0; font-size: 20px; }
+  #panel .sub { color: var(--muted); font-size: 13px; margin: 2px 0 16px; }
+  .section { font-weight: 700; font-size: 14px; margin: 14px 0 6px; }
+
+  .modes { display: flex; gap: 8px; }
+  .modes button {
+    flex: 1; padding: 9px 0; border: 0; border-radius: 8px; cursor: pointer;
+    background: var(--card-bg); color: var(--fg); font-size: 15px;
+  }
+  .modes button.active { background: var(--accent); color: #fff; }
+
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+
+  #refresh {
+    width: 100%; margin-top: 16px; padding: 12px; border: 0; border-radius: 10px;
+    background: var(--accent); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer;
+  }
+  #refresh:active { background: var(--accent-active); }
+  #refresh:disabled { opacity: .6; cursor: default; }
+
+  #status { color: var(--muted); font-size: 13px; margin: 10px 0 6px; min-height: 18px; }
+  #bar { width: 100%; height: 8px; background: var(--trough); border-radius: 5px; overflow: hidden; }
+  #bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+
+  .legend { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .swatch { width: 18px; height: 18px; border-radius: 4px; flex: 0 0 auto; }
+
+  /* Handy: Steuerleiste als aufklappbares Blatt unten */
+  #handle { display: none; }
+  @media (max-width: 720px) {
+    #app { flex-direction: column; }
+    #map { flex: 1 1 auto; }
+    #panel {
+      position: fixed; left: 0; right: 0; bottom: 0; flex: none; max-height: 62vh;
+      border-radius: 16px 16px 0 0; box-shadow: 0 -8px 24px rgba(0,0,0,.35);
+      padding-top: 8px; transition: transform .25s ease;
+    }
+    #panel.collapsed { transform: translateY(calc(100% - 118px)); }
+    #handle {
+      display: block; width: 42px; height: 5px; border-radius: 3px;
+      background: var(--trough); margin: 4px auto 12px; cursor: pointer;
+    }
+    #info { bottom: calc(118px + 10px); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map">
+    <div id="crosshair"></div>
+    <div id="info">Zoom –</div>
+  </div>
+
+  <div id="panel" class="collapsed">
+    <div id="handle" title="Auf-/zuklappen"></div>
+    <h1>Schnee-Checker</h1>
+    <div class="sub">Höhe und Schnee auf der Karte</div>
+
+    <div class="section">Modus</div>
+    <div class="modes">
+      <button id="mode-hoehe" class="active" data-mode="hoehe">Höhe</button>
+      <button id="mode-schnee" data-mode="schnee">Schnee</button>
+    </div>
+
+    <div class="section" id="threshold-label">Schwelle: 1500 m</div>
+    <input type="range" id="threshold" min="0" max="4000" step="50" value="1500">
+
+    <div class="section" id="resolution-label">Auflösung: 10 × 10</div>
+    <input type="range" id="resolution" min="4" max="18" step="1" value="10">
+
+    <button id="refresh">Aktualisieren</button>
+
+    <div id="status">Bereit.</div>
+    <div id="bar"><div id="bar-fill"></div></div>
+
+    <div class="section">Legende</div>
+    <div class="legend"><span class="swatch" id="legend-swatch"></span><span id="legend-text"></span></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ---- Konfiguration je Modus -------------------------------------------------
+const MODES = {
+  hoehe:  { label: "Höhe",   min: 0, max: 4000, step: 50, def: 1500, unit: "m",  color: [216, 60, 44] },
+  schnee: { label: "Schnee", min: 0, max: 200,  step: 5,  def: 30,   unit: "cm", color: [44, 110, 216] }
+};
+const START = { lat: 46.8, lon: 10.5, zoom: 7 };
+
+// ---- Zustand ----------------------------------------------------------------
+let mode = "hoehe";
+const thresholdByMode = { hoehe: MODES.hoehe.def, schnee: MODES.schnee.def };
+const cache = {};                 // key "modus:lat:lon" -> Wert
+let overlay = L.layerGroup();     // aktuelle Ergebnis-Rechtecke
+let running = false;
+
+// ---- Karte ------------------------------------------------------------------
+const map = L.map("map", { zoomControl: true, attributionControl: true })
+             .setView([START.lat, START.lon], START.zoom);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 17, attribution: "© OpenStreetMap-Mitwirkende"
+}).addTo(map);
+overlay.addTo(map);
+
+// ---- Info-Einblendung -------------------------------------------------------
+const info = document.getElementById("info");
+function updateInfo() {
+  const c = map.getCenter();
+  info.textContent = `Zoom ${map.getZoom()}   ${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`;
+}
+map.on("move zoom", updateInfo);
+updateInfo();
+
+// ---- Bedienelemente ---------------------------------------------------------
+const thresholdEl = document.getElementById("threshold");
+const thresholdLbl = document.getElementById("threshold-label");
+const resolutionEl = document.getElementById("resolution");
+const resolutionLbl = document.getElementById("resolution-label");
+const statusEl = document.getElementById("status");
+const barFill = document.getElementById("bar-fill");
+const refreshBtn = document.getElementById("refresh");
+
+function applyMode(newMode) {
+  mode = newMode;
+  const m = MODES[mode];
+  document.querySelectorAll(".modes button").forEach(b =>
+    b.classList.toggle("active", b.dataset.mode === mode));
+  thresholdEl.min = m.min; thresholdEl.max = m.max; thresholdEl.step = m.step;
+  thresholdEl.value = thresholdByMode[mode];
+  thresholdLbl.textContent = `Schwelle: ${thresholdEl.value} ${m.unit}`;
+  updateLegend();
+}
+function updateThresholdLabel() {
+  const m = MODES[mode];
+  thresholdByMode[mode] = Number(thresholdEl.value);
+  thresholdLbl.textContent = `Schwelle: ${thresholdEl.value} ${m.unit}`;
+}
+function updateLegend() {
+  const m = MODES[mode];
+  document.getElementById("legend-swatch").style.background = `rgb(${m.color.join(",")})`;
+  document.getElementById("legend-text").textContent =
+    mode === "schnee" ? "Fläche mit Schnee über der Schwelle" : "Fläche über der Höhenschwelle";
+}
+
+document.querySelectorAll(".modes button").forEach(b =>
+  b.addEventListener("click", () => applyMode(b.dataset.mode)));
+thresholdEl.addEventListener("input", updateThresholdLabel);
+resolutionEl.addEventListener("input", () =>
+  resolutionLbl.textContent = `Auflösung: ${resolutionEl.value} × ${resolutionEl.value}`);
+
+// Aufklappbares Blatt auf dem Handy
+const panel = document.getElementById("panel");
+document.getElementById("handle").addEventListener("click", () =>
+  panel.classList.toggle("collapsed"));
+
+// ---- Datenabruf (Open-Meteo) ------------------------------------------------
+function key(lat, lon) { return `${mode}:${lat.toFixed(4)}:${lon.toFixed(4)}`; }
+
+async function fetchElevation(points) {
+  const lat = points.map(p => p[0].toFixed(5)).join(",");
+  const lon = points.map(p => p[1].toFixed(5)).join(",");
+  const url = `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`;
+  const data = await (await fetch(url)).json();
+  return data.elevation;                       // Meter
+}
+async function fetchSnow(points) {
+  const lat = points.map(p => p[0].toFixed(5)).join(",");
+  const lon = points.map(p => p[1].toFixed(5)).join(",");
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=snow_depth`;
+  const data = await (await fetch(url)).json();
+  const entries = Array.isArray(data) ? data : [data];
+  return entries.map(e => {
+    const d = e.current ? e.current.snow_depth : null;
+    return d == null ? null : d * 100;         // Meter -> Zentimeter
+  });
+}
+
+function buildGrid(bounds, n) {
+  const latMin = bounds.getSouth(), latMax = bounds.getNorth();
+  const lonMin = bounds.getWest(),  lonMax = bounds.getEast();
+  const latStep = (latMax - latMin) / n, lonStep = (lonMax - lonMin) / n;
+  const cells = [];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const lat0 = latMin + r * latStep, lat1 = lat0 + latStep;
+      const lon0 = lonMin + c * lonStep, lon1 = lon0 + lonStep;
+      cells.push({ lat0, lon0, lat1, lon1, cLat: (lat0 + lat1) / 2, cLon: (lon0 + lon1) / 2 });
+    }
+  }
+  return cells;
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function refresh() {
+  if (running) return;
+  running = true;
+  refreshBtn.disabled = true; refreshBtn.textContent = "Lädt …";
+  barFill.style.width = "0%";
+  statusEl.textContent = "Daten werden geladen …";
+
+  const n = Number(resolutionEl.value);
+  const threshold = Number(thresholdEl.value);
+  const cells = buildGrid(map.getBounds(), n);
+
+  // Fehlende Mittelpunkte einsammeln.
+  const missing = cells.filter(c => cache[key(c.cLat, c.cLon)] === undefined);
+  const total = cells.length;
+  let done = total - missing.length;
+  const setProgress = () => barFill.style.width = `${Math.round(done / total * 100)}%`;
+  setProgress();
+
+  const BATCH = mode === "hoehe" ? 100 : 50;
+  try {
+    for (let i = 0; i < missing.length; i += BATCH) {
+      const chunk = missing.slice(i, i + BATCH);
+      const pts = chunk.map(c => [c.cLat, c.cLon]);
+      const values = mode === "hoehe" ? await fetchElevation(pts) : await fetchSnow(pts);
+      chunk.forEach((c, idx) => { cache[key(c.cLat, c.cLon)] = values[idx]; });
+      done += chunk.length;
+      setProgress();
+      statusEl.textContent = `Daten werden geladen … ${done}/${total}`;
+      if (i + BATCH < missing.length) await sleep(250);
+    }
+    draw(cells, threshold);
+  } catch (err) {
+    statusEl.textContent = "Fehler beim Laden: " + err.message;
+  } finally {
+    running = false;
+    refreshBtn.disabled = false; refreshBtn.textContent = "Aktualisieren";
+  }
+}
+
+function draw(cells, threshold) {
+  overlay.clearLayers();
+  const m = MODES[mode];
+  const color = `rgb(${m.color.join(",")})`;
+  let above = 0;
+  for (const c of cells) {
+    const v = cache[key(c.cLat, c.cLon)];
+    if (v == null || v < threshold) continue;
+    above++;
+    L.rectangle([[c.lat0, c.lon0], [c.lat1, c.lon1]], {
+      stroke: false, fillColor: color, fillOpacity: 0.45
+    }).addTo(overlay);
+  }
+  barFill.style.width = "100%";
+  statusEl.textContent = `Fertig – ${above} von ${cells.length} Feldern markiert.`;
+}
+
+refreshBtn.addEventListener("click", refresh);
+
+// ---- Start ------------------------------------------------------------------
+applyMode("hoehe");
+resolutionLbl.textContent = `Auflösung: ${resolutionEl.value} × ${resolutionEl.value}`;
+</script>
+</body>
+</html>

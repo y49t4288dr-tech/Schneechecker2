@@ -24,6 +24,27 @@ Python-Standardbibliothek (unter manchen Linux-Distributionen muss `python3-tk`
 separat nachinstalliert werden). Für den Datenabruf ist eine Internetverbindung
 nötig.
 
+## Auch auf dem Handy: Web-Version
+
+Neben der Desktop-App gibt es unter [`web/index.html`](web/index.html) eine
+eigenständige Web-Version derselben Idee (Leaflet-Karte, Höhe/Schnee-Umschalter,
+Schwelle, farbiges Overlay). Sie läuft in **jedem Browser – auch am Handy** mit
+Pinch-Zoom und Wischen, ohne Installation.
+
+**Öffnen auf dem Handy – am einfachsten über GitHub Pages (kostenlos):**
+
+1. Im GitHub-Repository auf **Settings → Pages** gehen.
+2. Bei *Build and deployment* → *Source* **„Deploy from a branch"** wählen,
+   Branch `main` (oder den gewünschten Branch) und Ordner `/root`, speichern.
+3. Nach kurzer Wartezeit zeigt GitHub eine Adresse an, z. B.
+   `https://<benutzername>.github.io/Schneechecker2/web/`.
+4. Diese Adresse auf dem Handy im Browser öffnen (und bei iPhone/Android bei
+   Bedarf „Zum Home-Bildschirm hinzufügen").
+
+> Hinweis: Als Artifact/Chat-Vorschau lässt sich die Karte **nicht** anzeigen –
+> jene Sandbox erlaubt keine externen Kartenkacheln und keine API-Zugriffe. Über
+> eine normal gehostete Seite (GitHub Pages) funktioniert beides.
+
 ## Bedienung
 
 1. Zu der Region navigieren, die einen interessiert – mit gedrückter Maustaste
