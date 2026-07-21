@@ -43,6 +43,10 @@ Funktionen der Web-Version:
   Projektionsraster. Weil die Messpunkte einrasten, werden beim Verschieben
   schon geladene Punkte aus dem Cache genutzt statt neu abgefragt – zusammen mit
   großen Anfrage-Paketen und einer Obergrenze schont das die Datenquelle.
+- **Sparsam mit Abfragen:** Die Schwelle färbt die Karte sofort aus den bereits
+  geladenen Werten neu ein – ganz ohne neue Abfrage. Höhenwerte ändern sich nie
+  und werden dauerhaft im Browser gespeichert (localStorage), also nie zweimal
+  geladen. Schneewerte bleiben tagesaktuell und werden nur pro Sitzung gehalten.
 - Einstellungen (Modus, Schwelle, Feinheit) werden gemerkt; wackliges Netz wird
   mit einem Wiederholversuch abgefangen.
 

@@ -152,7 +152,8 @@ const thresholdByMode = { hoehe: MODES.hoehe.def, schnee: MODES.schnee.def };
 const cache = {};
 const overlay = L.layerGroup();
 let running = false;
-let lastCells = [];     // zuletzt abgetastete Zellen (für Antippen)
+let lastCells = [];     // zuletzt abgetastete Zellen (für Antippen + Neu-Einfärben)
+let redrawPending = false;
 
 // ---- Karte ------------------------------------------------------------------
 const map = L.map("map", { zoomControl: true }).setView([START.lat, START.lon], START.zoom);
@@ -247,7 +248,14 @@ function updateLegend(minVal, maxVal) {
 
 document.querySelectorAll(".modes button").forEach((b) =>
   b.addEventListener("click", () => applyMode(b.dataset.mode)));
-thresholdEl.addEventListener("input", updateThresholdLabel);
+thresholdEl.addEventListener("input", () => {
+  updateThresholdLabel();
+  // Sofort aus den schon geladenen Werten neu einfärben – ganz ohne Abfrage.
+  if (lastCells.length && !redrawPending) {
+    redrawPending = true;
+    requestAnimationFrame(() => { redrawPending = false; draw(lastCells, Number(thresholdEl.value)); });
+  }
+});
 resolutionEl.addEventListener("input", () => {
   resolutionLbl.textContent = `Feinheit: ${resolutionEl.value} / 6`;
   saveSettings();
@@ -270,6 +278,22 @@ function loadSettings() {
     const s = JSON.parse(localStorage.getItem("schnee") || "{}");
     if (s.mode && MODES[s.mode]) { thresholdByMode[s.mode] = s.threshold ?? MODES[s.mode].def; mode = s.mode; }
     if (s.resolution) resolutionEl.value = s.resolution;
+  } catch (_) {}
+}
+
+// Höhenwerte ändern sich nie -> dauerhaft im Browser sichern und nie neu laden.
+// (Schnee ändert sich mit dem Wetter und wird bewusst nur pro Sitzung gehalten.)
+function saveElev() {
+  try {
+    const obj = {};
+    for (const k in cache) if (k.slice(0, 6) === "hoehe:") obj[k] = cache[k];
+    localStorage.setItem("schnee_elev", JSON.stringify(obj));
+  } catch (_) {}
+}
+function loadElev() {
+  try {
+    const obj = JSON.parse(localStorage.getItem("schnee_elev") || "{}");
+    for (const k in obj) cache[k] = obj[k];
   } catch (_) {}
 }
 
@@ -379,6 +403,7 @@ async function refresh() {
       if (i + BATCH < missing.length) await sleep(250);
     }
     cells.forEach((c) => { c.value = cache[key(c.cLat, c.cLon)]; });
+    if (mode === "hoehe" && missing.length) saveElev();   // neue Höhen dauerhaft sichern
     draw(cells, threshold);
     if (coarsened) statusEl.textContent += " · Kästchen vergröbert – zum Verfeinern hineinzoomen.";
   } catch (err) {
@@ -427,6 +452,7 @@ function draw(cells, threshold) {
 refreshBtn.addEventListener("click", refresh);
 
 // ---- Start ------------------------------------------------------------------
+loadElev();       // dauerhaft gespeicherte Höhenwerte zurückholen
 loadSettings();
 applyMode(mode);
 resolutionLbl.textContent = `Feinheit: ${resolutionEl.value} / 6`;
