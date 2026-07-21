@@ -2,8 +2,16 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Schnee-Checker</title>
+
+<!-- App-Installation (PWA) -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1e1e24">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Schnee-Checker">
 
 <!-- Leaflet (OpenStreetMap-Karte) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -11,13 +19,8 @@
 
 <style>
   :root {
-    --panel-bg: #1e1e24;
-    --card-bg: #26262e;
-    --fg: #e6e6ea;
-    --muted: #9a9aa5;
-    --accent: #d63a2f;
-    --accent-active: #b8281f;
-    --trough: #3a3a44;
+    --panel-bg: #1e1e24; --card-bg: #26262e; --fg: #e6e6ea; --muted: #9a9aa5;
+    --accent: #d63a2f; --accent-active: #b8281f; --trough: #3a3a44;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
@@ -26,43 +29,36 @@
   #app { position: fixed; inset: 0; display: flex; }
   #map { flex: 1 1 auto; height: 100%; background: #e8e4dc; }
 
-  /* Fadenkreuz in der Kartenmitte */
-  #crosshair { position: absolute; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none; z-index: 500; }
-  #crosshair::before, #crosshair::after {
-    content: ""; position: absolute; background: rgba(0,0,0,.45);
-  }
+  #crosshair { position: absolute; inset: 0; pointer-events: none; z-index: 500; }
+  #crosshair::before, #crosshair::after { content: ""; position: absolute; background: rgba(0,0,0,.45); }
   #crosshair::before { left: 50%; top: 50%; width: 1px; height: 24px; transform: translate(-50%,-50%); }
   #crosshair::after  { left: 50%; top: 50%; width: 24px; height: 1px; transform: translate(-50%,-50%); }
 
-  /* Info-Einblendung unten links */
-  #info {
-    position: absolute; left: 10px; bottom: 10px; z-index: 500;
-    background: rgba(0,0,0,.6); color: #fff; padding: 4px 8px;
-    border-radius: 6px; font-size: 12px; pointer-events: none;
-  }
+  #info { position: absolute; left: 10px; bottom: 10px; z-index: 500;
+    background: rgba(0,0,0,.6); color: #fff; padding: 4px 8px; border-radius: 6px;
+    font-size: 12px; pointer-events: none; }
 
-  /* Steuerleiste */
-  #panel {
-    flex: 0 0 300px; background: var(--panel-bg); color: var(--fg);
-    padding: 18px; overflow-y: auto; z-index: 600;
-  }
+  #panel { flex: 0 0 300px; background: var(--panel-bg); color: var(--fg);
+    padding: 18px; overflow-y: auto; z-index: 600; }
   #panel h1 { margin: 0; font-size: 20px; }
-  #panel .sub { color: var(--muted); font-size: 13px; margin: 2px 0 16px; }
+  #panel .sub { color: var(--muted); font-size: 13px; margin: 2px 0 14px; }
   .section { font-weight: 700; font-size: 14px; margin: 14px 0 6px; }
 
+  .search { display: flex; gap: 8px; margin-bottom: 4px; }
+  .search input { flex: 1; min-width: 0; background: var(--card-bg); color: var(--fg);
+    border: 1px solid var(--trough); border-radius: 8px; padding: 9px 10px; font-size: 15px; }
+  .search button { flex: 0 0 auto; background: var(--card-bg); color: var(--fg);
+    border: 1px solid var(--trough); border-radius: 8px; padding: 0 14px; font-size: 15px; cursor: pointer; }
+
   .modes { display: flex; gap: 8px; }
-  .modes button {
-    flex: 1; padding: 9px 0; border: 0; border-radius: 8px; cursor: pointer;
-    background: var(--card-bg); color: var(--fg); font-size: 15px;
-  }
+  .modes button { flex: 1; padding: 9px 0; border: 0; border-radius: 8px; cursor: pointer;
+    background: var(--card-bg); color: var(--fg); font-size: 15px; }
   .modes button.active { background: var(--accent); color: #fff; }
 
   input[type=range] { width: 100%; accent-color: var(--accent); }
 
-  #refresh {
-    width: 100%; margin-top: 16px; padding: 12px; border: 0; border-radius: 10px;
-    background: var(--accent); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer;
-  }
+  #refresh { width: 100%; margin-top: 16px; padding: 12px; border: 0; border-radius: 10px;
+    background: var(--accent); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
   #refresh:active { background: var(--accent-active); }
   #refresh:disabled { opacity: .6; cursor: default; }
 
@@ -70,25 +66,26 @@
   #bar { width: 100%; height: 8px; background: var(--trough); border-radius: 5px; overflow: hidden; }
   #bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
 
-  .legend { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin-top: 8px; }
-  .swatch { width: 18px; height: 18px; border-radius: 4px; flex: 0 0 auto; }
+  #legend-bar { height: 14px; border-radius: 7px; margin-top: 4px;
+    background: linear-gradient(to right, #eee, #999); }
+  #legend-labels { display: flex; justify-content: space-between; color: var(--muted);
+    font-size: 12px; margin-top: 3px; }
+  #legend-note { color: var(--muted); font-size: 12px; margin-top: 8px; line-height: 1.35; }
 
-  /* Handy: Steuerleiste als aufklappbares Blatt unten */
+  /* eigene Karten-Buttons (Standort) */
+  .leaflet-bar a.locate { font-size: 18px; line-height: 30px; text-align: center; }
+
   #handle { display: none; }
   @media (max-width: 720px) {
     #app { flex-direction: column; }
-    #map { flex: 1 1 auto; }
-    #panel {
-      position: fixed; left: 0; right: 0; bottom: 0; flex: none; max-height: 62vh;
+    #panel { position: fixed; left: 0; right: 0; bottom: 0; flex: none; max-height: 66vh;
       border-radius: 16px 16px 0 0; box-shadow: 0 -8px 24px rgba(0,0,0,.35);
-      padding-top: 8px; transition: transform .25s ease;
-    }
-    #panel.collapsed { transform: translateY(calc(100% - 118px)); }
-    #handle {
-      display: block; width: 42px; height: 5px; border-radius: 3px;
-      background: var(--trough); margin: 4px auto 12px; cursor: pointer;
-    }
-    #info { bottom: calc(118px + 10px); }
+      padding-top: 8px; padding-bottom: calc(18px + env(safe-area-inset-bottom));
+      transition: transform .25s ease; }
+    #panel.collapsed { transform: translateY(calc(100% - 122px)); }
+    #handle { display: block; width: 42px; height: 5px; border-radius: 3px;
+      background: var(--trough); margin: 4px auto 12px; cursor: pointer; }
+    #info { bottom: calc(122px + 10px); }
   }
 </style>
 </head>
@@ -104,10 +101,15 @@
     <h1>Schnee-Checker</h1>
     <div class="sub">Höhe und Schnee auf der Karte</div>
 
+    <div class="search">
+      <input id="search-input" type="text" placeholder="Ort suchen (z. B. Zermatt)" enterkeyhint="search">
+      <button id="search-btn">Suchen</button>
+    </div>
+
     <div class="section">Modus</div>
     <div class="modes">
-      <button id="mode-hoehe" class="active" data-mode="hoehe">Höhe</button>
-      <button id="mode-schnee" data-mode="schnee">Schnee</button>
+      <button class="active" data-mode="hoehe">Höhe</button>
+      <button data-mode="schnee">Schnee</button>
     </div>
 
     <div class="section" id="threshold-label">Schwelle: 1500 m</div>
@@ -122,7 +124,9 @@
     <div id="bar"><div id="bar-fill"></div></div>
 
     <div class="section">Legende</div>
-    <div class="legend"><span class="swatch" id="legend-swatch"></span><span id="legend-text"></span></div>
+    <div id="legend-bar"></div>
+    <div id="legend-labels"><span id="legend-min">–</span><span id="legend-max">–</span></div>
+    <div id="legend-note"></div>
   </div>
 </div>
 
@@ -131,25 +135,58 @@
 
 // ---- Konfiguration je Modus -------------------------------------------------
 const MODES = {
-  hoehe:  { label: "Höhe",   min: 0, max: 4000, step: 50, def: 1500, unit: "m",  color: [216, 60, 44] },
-  schnee: { label: "Schnee", min: 0, max: 200,  step: 5,  def: 30,   unit: "cm", color: [44, 110, 216] }
+  hoehe:  { label: "Höhe",   min: 0, max: 4000, step: 50, def: 1500, unit: "m",
+            grad: [[255,247,188],[240,140,40],[150,20,10]],
+            note: "Höhe = Geländehöhe über Meer (Copernicus-Höhenmodell)." },
+  schnee: { label: "Schnee", min: 0, max: 200,  step: 5,  def: 30,   unit: "cm",
+            grad: [[210,240,255],[60,140,220],[15,40,130]],
+            note: "Schnee = grobes Wettermodell (~11 km), kein Messwert vom Berg." }
 };
 const START = { lat: 46.8, lon: 10.5, zoom: 7 };
 
 // ---- Zustand ----------------------------------------------------------------
 let mode = "hoehe";
 const thresholdByMode = { hoehe: MODES.hoehe.def, schnee: MODES.schnee.def };
-const cache = {};                 // key "modus:lat:lon" -> Wert
-let overlay = L.layerGroup();     // aktuelle Ergebnis-Rechtecke
+const cache = {};
+const overlay = L.layerGroup();
 let running = false;
+let lastCells = [];     // zuletzt abgetastete Zellen (für Antippen)
 
 // ---- Karte ------------------------------------------------------------------
-const map = L.map("map", { zoomControl: true, attributionControl: true })
-             .setView([START.lat, START.lon], START.zoom);
+const map = L.map("map", { zoomControl: true }).setView([START.lat, START.lon], START.zoom);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 17, attribution: "© OpenStreetMap-Mitwirkende"
+  maxZoom: 17, attribution: "© OpenStreetMap-Mitwirkende · Suche © Nominatim"
 }).addTo(map);
 overlay.addTo(map);
+
+// Standort-Button (unten rechts)
+const LocateControl = L.Control.extend({
+  options: { position: "bottomright" },
+  onAdd: function () {
+    const div = L.DomUtil.create("div", "leaflet-bar");
+    const a = L.DomUtil.create("a", "locate", div);
+    a.href = "#"; a.title = "Mein Standort"; a.innerHTML = "📍";
+    L.DomEvent.on(a, "click", (e) => { L.DomEvent.stop(e); locateMe(); });
+    return div;
+  }
+});
+map.addControl(new LocateControl());
+let locateMarker = null;
+function locateMe() {
+  if (!navigator.geolocation) { statusEl.textContent = "Standort wird nicht unterstützt."; return; }
+  statusEl.textContent = "Standort wird bestimmt …";
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const ll = [pos.coords.latitude, pos.coords.longitude];
+      map.setView(ll, Math.max(map.getZoom(), 11));
+      if (locateMarker) locateMarker.setLatLng(ll);
+      else locateMarker = L.circleMarker(ll, { radius: 7, color: "#fff", weight: 2, fillColor: "#2a7", fillOpacity: 1 }).addTo(map);
+      statusEl.textContent = "Standort gefunden.";
+    },
+    () => { statusEl.textContent = "Standort nicht verfügbar (Freigabe nötig)."; },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
 
 // ---- Info-Einblendung -------------------------------------------------------
 const info = document.getElementById("info");
@@ -157,8 +194,17 @@ function updateInfo() {
   const c = map.getCenter();
   info.textContent = `Zoom ${map.getZoom()}   ${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`;
 }
-map.on("move zoom", updateInfo);
-updateInfo();
+map.on("move zoom", updateInfo); updateInfo();
+
+// Wert antippen: passende Zelle suchen und Wert anzeigen
+map.on("click", (e) => {
+  const { lat, lng } = e.latlng;
+  const cell = lastCells.find((c) => lat >= c.lat0 && lat <= c.lat1 && lng >= c.lon0 && lng <= c.lon1);
+  let txt;
+  if (!cell || cell.value == null) txt = "Keine Daten hier – erst „Aktualisieren“.";
+  else txt = `<b>${Math.round(cell.value)} ${MODES[mode].unit}</b>`;
+  L.popup().setLatLng(e.latlng).setContent(txt).openOn(map);
+});
 
 // ---- Bedienelemente ---------------------------------------------------------
 const thresholdEl = document.getElementById("threshold");
@@ -172,56 +218,100 @@ const refreshBtn = document.getElementById("refresh");
 function applyMode(newMode) {
   mode = newMode;
   const m = MODES[mode];
-  document.querySelectorAll(".modes button").forEach(b =>
+  document.querySelectorAll(".modes button").forEach((b) =>
     b.classList.toggle("active", b.dataset.mode === mode));
   thresholdEl.min = m.min; thresholdEl.max = m.max; thresholdEl.step = m.step;
   thresholdEl.value = thresholdByMode[mode];
   thresholdLbl.textContent = `Schwelle: ${thresholdEl.value} ${m.unit}`;
-  updateLegend();
+  overlay.clearLayers(); lastCells = [];
+  updateLegend(thresholdByMode[mode], m.max);
+  saveSettings();
 }
 function updateThresholdLabel() {
-  const m = MODES[mode];
   thresholdByMode[mode] = Number(thresholdEl.value);
-  thresholdLbl.textContent = `Schwelle: ${thresholdEl.value} ${m.unit}`;
+  thresholdLbl.textContent = `Schwelle: ${thresholdEl.value} ${MODES[mode].unit}`;
+  saveSettings();
 }
-function updateLegend() {
+function updateLegend(minVal, maxVal) {
   const m = MODES[mode];
-  document.getElementById("legend-swatch").style.background = `rgb(${m.color.join(",")})`;
-  document.getElementById("legend-text").textContent =
-    mode === "schnee" ? "Fläche mit Schnee über der Schwelle" : "Fläche über der Höhenschwelle";
+  document.getElementById("legend-bar").style.background =
+    `linear-gradient(to right, rgb(${m.grad[0]}), rgb(${m.grad[1]}), rgb(${m.grad[2]}))`;
+  document.getElementById("legend-min").textContent = `${Math.round(minVal)} ${m.unit}`;
+  document.getElementById("legend-max").textContent = `${Math.round(maxVal)} ${m.unit}`;
+  document.getElementById("legend-note").textContent = m.note;
 }
 
-document.querySelectorAll(".modes button").forEach(b =>
+document.querySelectorAll(".modes button").forEach((b) =>
   b.addEventListener("click", () => applyMode(b.dataset.mode)));
 thresholdEl.addEventListener("input", updateThresholdLabel);
-resolutionEl.addEventListener("input", () =>
-  resolutionLbl.textContent = `Auflösung: ${resolutionEl.value} × ${resolutionEl.value}`);
+resolutionEl.addEventListener("input", () => {
+  resolutionLbl.textContent = `Auflösung: ${resolutionEl.value} × ${resolutionEl.value}`;
+  saveSettings();
+});
 
-// Aufklappbares Blatt auf dem Handy
+// Aufklappbares Blatt (Handy)
 const panel = document.getElementById("panel");
-document.getElementById("handle").addEventListener("click", () =>
-  panel.classList.toggle("collapsed"));
+document.getElementById("handle").addEventListener("click", () => panel.classList.toggle("collapsed"));
+
+// Einstellungen merken
+function saveSettings() {
+  try {
+    localStorage.setItem("schnee", JSON.stringify({
+      mode, threshold: Number(thresholdEl.value), resolution: Number(resolutionEl.value)
+    }));
+  } catch (_) {}
+}
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem("schnee") || "{}");
+    if (s.mode && MODES[s.mode]) { thresholdByMode[s.mode] = s.threshold ?? MODES[s.mode].def; mode = s.mode; }
+    if (s.resolution) resolutionEl.value = s.resolution;
+  } catch (_) {}
+}
+
+// ---- Ortssuche (Nominatim) --------------------------------------------------
+async function searchPlace() {
+  const q = document.getElementById("search-input").value.trim();
+  if (!q) return;
+  statusEl.textContent = "Ort wird gesucht …";
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
+    const arr = await (await fetch(url, { headers: { "Accept": "application/json" } })).json();
+    if (arr.length) {
+      map.setView([+arr[0].lat, +arr[0].lon], 11);
+      statusEl.textContent = "Gefunden: " + (arr[0].display_name || q);
+    } else statusEl.textContent = "Ort nicht gefunden.";
+  } catch (err) { statusEl.textContent = "Suche fehlgeschlagen: " + err.message; }
+}
+document.getElementById("search-btn").addEventListener("click", searchPlace);
+document.getElementById("search-input").addEventListener("keydown", (e) => { if (e.key === "Enter") searchPlace(); });
 
 // ---- Datenabruf (Open-Meteo) ------------------------------------------------
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function key(lat, lon) { return `${mode}:${lat.toFixed(4)}:${lon.toFixed(4)}`; }
 
-async function fetchElevation(points) {
-  const lat = points.map(p => p[0].toFixed(5)).join(",");
-  const lon = points.map(p => p[1].toFixed(5)).join(",");
-  const url = `https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`;
-  const data = await (await fetch(url)).json();
-  return data.elevation;                       // Meter
+async function getJSON(url, tries = 2) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return await r.json();
+    } catch (err) {
+      if (i === tries - 1) throw err;
+      await sleep(600);   // kurz warten und einmal erneut versuchen
+    }
+  }
 }
-async function fetchSnow(points) {
-  const lat = points.map(p => p[0].toFixed(5)).join(",");
-  const lon = points.map(p => p[1].toFixed(5)).join(",");
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=snow_depth`;
-  const data = await (await fetch(url)).json();
-  const entries = Array.isArray(data) ? data : [data];
-  return entries.map(e => {
-    const d = e.current ? e.current.snow_depth : null;
-    return d == null ? null : d * 100;         // Meter -> Zentimeter
-  });
+async function fetchValues(points) {
+  const lat = points.map((p) => p[0].toFixed(5)).join(",");
+  const lon = points.map((p) => p[1].toFixed(5)).join(",");
+  if (mode === "hoehe") {
+    const d = await getJSON(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`);
+    return d.elevation;                                   // Meter
+  }
+  const d = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=snow_depth`);
+  const entries = Array.isArray(d) ? d : [d];
+  return entries.map((e) => (e.current && e.current.snow_depth != null) ? e.current.snow_depth * 100 : null);
 }
 
 function buildGrid(bounds, n) {
@@ -229,48 +319,41 @@ function buildGrid(bounds, n) {
   const lonMin = bounds.getWest(),  lonMax = bounds.getEast();
   const latStep = (latMax - latMin) / n, lonStep = (lonMax - lonMin) / n;
   const cells = [];
-  for (let r = 0; r < n; r++) {
+  for (let r = 0; r < n; r++)
     for (let c = 0; c < n; c++) {
       const lat0 = latMin + r * latStep, lat1 = lat0 + latStep;
       const lon0 = lonMin + c * lonStep, lon1 = lon0 + lonStep;
-      cells.push({ lat0, lon0, lat1, lon1, cLat: (lat0 + lat1) / 2, cLon: (lon0 + lon1) / 2 });
+      cells.push({ lat0, lon0, lat1, lon1, cLat: (lat0 + lat1) / 2, cLon: (lon0 + lon1) / 2, value: null });
     }
-  }
   return cells;
 }
-
-const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function refresh() {
   if (running) return;
   running = true;
   refreshBtn.disabled = true; refreshBtn.textContent = "Lädt …";
-  barFill.style.width = "0%";
-  statusEl.textContent = "Daten werden geladen …";
+  barFill.style.width = "0%"; statusEl.textContent = "Daten werden geladen …";
 
   const n = Number(resolutionEl.value);
   const threshold = Number(thresholdEl.value);
   const cells = buildGrid(map.getBounds(), n);
-
-  // Fehlende Mittelpunkte einsammeln.
-  const missing = cells.filter(c => cache[key(c.cLat, c.cLon)] === undefined);
+  const missing = cells.filter((c) => cache[key(c.cLat, c.cLon)] === undefined);
   const total = cells.length;
   let done = total - missing.length;
-  const setProgress = () => barFill.style.width = `${Math.round(done / total * 100)}%`;
-  setProgress();
+  const setP = () => barFill.style.width = `${Math.round(done / total * 100)}%`;
+  setP();
 
   const BATCH = mode === "hoehe" ? 100 : 50;
   try {
     for (let i = 0; i < missing.length; i += BATCH) {
       const chunk = missing.slice(i, i + BATCH);
-      const pts = chunk.map(c => [c.cLat, c.cLon]);
-      const values = mode === "hoehe" ? await fetchElevation(pts) : await fetchSnow(pts);
+      const values = await fetchValues(chunk.map((c) => [c.cLat, c.cLon]));
       chunk.forEach((c, idx) => { cache[key(c.cLat, c.cLon)] = values[idx]; });
-      done += chunk.length;
-      setProgress();
+      done += chunk.length; setP();
       statusEl.textContent = `Daten werden geladen … ${done}/${total}`;
       if (i + BATCH < missing.length) await sleep(250);
     }
+    cells.forEach((c) => { c.value = cache[key(c.cLat, c.cLon)]; });
     draw(cells, threshold);
   } catch (err) {
     statusEl.textContent = "Fehler beim Laden: " + err.message;
@@ -280,28 +363,44 @@ async function refresh() {
   }
 }
 
+function gradColor(m, t) {
+  t = Math.max(0, Math.min(1, t));
+  const s = m.grad;
+  const [a, b, f] = t < 0.5 ? [s[0], s[1], t / 0.5] : [s[1], s[2], (t - 0.5) / 0.5];
+  const c = (k) => Math.round(a[k] + (b[k] - a[k]) * f);
+  return `rgb(${c(0)},${c(1)},${c(2)})`;
+}
+
 function draw(cells, threshold) {
   overlay.clearLayers();
+  lastCells = cells;
   const m = MODES[mode];
-  const color = `rgb(${m.color.join(",")})`;
-  let above = 0;
-  for (const c of cells) {
-    const v = cache[key(c.cLat, c.cLon)];
-    if (v == null || v < threshold) continue;
-    above++;
+  const above = cells.filter((c) => c.value != null && c.value >= threshold);
+  const maxVal = above.reduce((mx, c) => Math.max(mx, c.value), threshold);
+  const scaleMax = maxVal > threshold ? maxVal : threshold + 1;
+
+  for (const c of above) {
+    const t = (c.value - threshold) / (scaleMax - threshold);
     L.rectangle([[c.lat0, c.lon0], [c.lat1, c.lon1]], {
-      stroke: false, fillColor: color, fillOpacity: 0.45
+      stroke: false, fillColor: gradColor(m, t), fillOpacity: 0.6, interactive: false
     }).addTo(overlay);
   }
   barFill.style.width = "100%";
-  statusEl.textContent = `Fertig – ${above} von ${cells.length} Feldern markiert.`;
+  updateLegend(threshold, scaleMax);
+  statusEl.textContent = `Fertig – ${above.length} von ${cells.length} Feldern markiert.`;
 }
 
 refreshBtn.addEventListener("click", refresh);
 
 // ---- Start ------------------------------------------------------------------
-applyMode("hoehe");
+loadSettings();
+applyMode(mode);
 resolutionLbl.textContent = `Auflösung: ${resolutionEl.value} × ${resolutionEl.value}`;
+
+// Service Worker registrieren (für App-Installation)
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
 </script>
 </body>
 </html>

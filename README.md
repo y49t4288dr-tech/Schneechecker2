@@ -27,9 +27,20 @@ nötig.
 ## Auch auf dem Handy: Web-Version
 
 Neben der Desktop-App gibt es unter [`web/index.html`](web/index.html) eine
-eigenständige Web-Version derselben Idee (Leaflet-Karte, Höhe/Schnee-Umschalter,
-Schwelle, farbiges Overlay). Sie läuft in **jedem Browser – auch am Handy** mit
-Pinch-Zoom und Wischen, ohne Installation.
+eigenständige Web-Version derselben Idee. Sie läuft in **jedem Browser – auch am
+Handy** mit Pinch-Zoom und Wischen.
+
+Funktionen der Web-Version:
+
+- **Farbverlauf statt nur „drüber/drunter":** Flächen werden je nach Höhe bzw.
+  Schneehöhe abgestuft eingefärbt, mit passender Farbskala in der Legende.
+- **Wert antippen:** Tippt man auf ein Feld, erscheint der genaue Wert.
+- **Mein Standort:** Knopf unten rechts springt zur aktuellen GPS-Position.
+- **Ortssuche:** Suchfeld für Orte (über Nominatim/OpenStreetMap).
+- **Als App installierbar (PWA):** eigenes Icon, „Zum Home-Bildschirm
+  hinzufügen", startet wie eine App.
+- Einstellungen (Modus, Schwelle, Auflösung) werden gemerkt; wackliges Netz wird
+  mit einem Wiederholversuch abgefangen.
 
 **Öffnen auf dem Handy – am einfachsten über GitHub Pages (kostenlos):**
 
