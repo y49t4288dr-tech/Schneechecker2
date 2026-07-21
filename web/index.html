@@ -136,10 +136,12 @@
 // ---- Konfiguration je Modus -------------------------------------------------
 const MODES = {
   hoehe:  { label: "Höhe",   min: 0, max: 4000, step: 50, def: 1500, unit: "m",
-            grad: [[255,247,188],[240,140,40],[150,20,10]],
+            grad: [[255,255,204],[255,237,160],[254,178,76],[253,141,60],
+                   [252,78,42],[227,26,28],[177,0,38]],
             note: "Höhe = Geländehöhe über Meer (Copernicus-Höhenmodell)." },
   schnee: { label: "Schnee", min: 0, max: 200,  step: 5,  def: 30,   unit: "cm",
-            grad: [[210,240,255],[60,140,220],[15,40,130]],
+            grad: [[240,249,255],[204,224,244],[147,195,230],[74,152,209],
+                   [30,110,183],[12,66,145],[28,40,120]],
             note: "Schnee = grobes Wettermodell (~11 km), kein Messwert vom Berg." }
 };
 const START = { lat: 46.8, lon: 10.5, zoom: 7 };
@@ -234,8 +236,10 @@ function updateThresholdLabel() {
 }
 function updateLegend(minVal, maxVal) {
   const m = MODES[mode];
-  document.getElementById("legend-bar").style.background =
-    `linear-gradient(to right, rgb(${m.grad[0]}), rgb(${m.grad[1]}), rgb(${m.grad[2]}))`;
+  const stops = m.grad
+    .map((c, i) => `rgb(${c[0]},${c[1]},${c[2]}) ${Math.round(i / (m.grad.length - 1) * 100)}%`)
+    .join(", ");
+  document.getElementById("legend-bar").style.background = `linear-gradient(to right, ${stops})`;
   document.getElementById("legend-min").textContent = `${Math.round(minVal)} ${m.unit}`;
   document.getElementById("legend-max").textContent = `${Math.round(maxVal)} ${m.unit}`;
   document.getElementById("legend-note").textContent = m.note;
@@ -323,7 +327,7 @@ function buildGrid(bounds, n) {
     for (let c = 0; c < n; c++) {
       const lat0 = latMin + r * latStep, lat1 = lat0 + latStep;
       const lon0 = lonMin + c * lonStep, lon1 = lon0 + lonStep;
-      cells.push({ lat0, lon0, lat1, lon1, cLat: (lat0 + lat1) / 2, cLon: (lon0 + lon1) / 2, value: null });
+      cells.push({ r, c, lat0, lon0, lat1, lon1, cLat: (lat0 + lat1) / 2, cLon: (lon0 + lon1) / 2, value: null });
     }
   return cells;
 }
@@ -336,7 +340,8 @@ async function refresh() {
 
   const n = Number(resolutionEl.value);
   const threshold = Number(thresholdEl.value);
-  const cells = buildGrid(map.getBounds(), n);
+  const bounds = map.getBounds();
+  const cells = buildGrid(bounds, n);
   const missing = cells.filter((c) => cache[key(c.cLat, c.cLon)] === undefined);
   const total = cells.length;
   let done = total - missing.length;
@@ -354,7 +359,7 @@ async function refresh() {
       if (i + BATCH < missing.length) await sleep(250);
     }
     cells.forEach((c) => { c.value = cache[key(c.cLat, c.cLon)]; });
-    draw(cells, threshold);
+    draw(cells, threshold, bounds, n);
   } catch (err) {
     statusEl.textContent = "Fehler beim Laden: " + err.message;
   } finally {
@@ -363,31 +368,55 @@ async function refresh() {
   }
 }
 
-function gradColor(m, t) {
+// Mehrstufige Farbskala: interpoliert weich zwischen beliebig vielen Stützfarben.
+function ramp(stops, t) {
   t = Math.max(0, Math.min(1, t));
-  const s = m.grad;
-  const [a, b, f] = t < 0.5 ? [s[0], s[1], t / 0.5] : [s[1], s[2], (t - 0.5) / 0.5];
-  const c = (k) => Math.round(a[k] + (b[k] - a[k]) * f);
-  return `rgb(${c(0)},${c(1)},${c(2)})`;
+  const x = t * (stops.length - 1);
+  const i = Math.min(Math.floor(x), stops.length - 2);
+  const f = x - i, a = stops[i], b = stops[i + 1];
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * f),
+    Math.round(a[1] + (b[1] - a[1]) * f),
+    Math.round(a[2] + (b[2] - a[2]) * f)
+  ];
 }
 
-function draw(cells, threshold) {
+function draw(cells, threshold, bounds, n) {
   overlay.clearLayers();
   lastCells = cells;
   const m = MODES[mode];
-  const above = cells.filter((c) => c.value != null && c.value >= threshold);
-  const maxVal = above.reduce((mx, c) => Math.max(mx, c.value), threshold);
+  const aboveVals = cells.filter((c) => c.value != null && c.value >= threshold).map((c) => c.value);
+  const maxVal = aboveVals.reduce((mx, v) => Math.max(mx, v), threshold);
   const scaleMax = maxVal > threshold ? maxVal : threshold + 1;
 
-  for (const c of above) {
+  // 1) Kleines n×n-Bild: eine Zelle = ein Pixel, Farbe + Deckkraft nach Wert.
+  const base = document.createElement("canvas");
+  base.width = n; base.height = n;
+  const bctx = base.getContext("2d");
+  const idata = bctx.createImageData(n, n);
+  for (const c of cells) {
+    const y = (n - 1 - c.r), x = c.c, idx = (y * n + x) * 4;   // Bild: oben = Norden
+    if (c.value == null || c.value < threshold) { idata.data[idx + 3] = 0; continue; }
     const t = (c.value - threshold) / (scaleMax - threshold);
-    L.rectangle([[c.lat0, c.lon0], [c.lat1, c.lon1]], {
-      stroke: false, fillColor: gradColor(m, t), fillOpacity: 0.6, interactive: false
-    }).addTo(overlay);
+    const col = ramp(m.grad, t);
+    idata.data[idx] = col[0]; idata.data[idx + 1] = col[1]; idata.data[idx + 2] = col[2];
+    idata.data[idx + 3] = Math.round((0.5 + 0.35 * t) * 255);   // dichter bei hohen Werten
   }
+  bctx.putImageData(idata, 0, 0);
+
+  // 2) Weich hochskalieren -> stufenloser Verlauf statt harter Kacheln.
+  const k = Math.max(1, Math.round(340 / n));
+  const big = document.createElement("canvas");
+  big.width = n * k; big.height = n * k;
+  const gctx = big.getContext("2d");
+  gctx.imageSmoothingEnabled = true; gctx.imageSmoothingQuality = "high";
+  gctx.drawImage(base, 0, 0, big.width, big.height);
+
+  L.imageOverlay(big.toDataURL(), bounds, { opacity: 1, interactive: false }).addTo(overlay);
+
   barFill.style.width = "100%";
   updateLegend(threshold, scaleMax);
-  statusEl.textContent = `Fertig – ${above.length} von ${cells.length} Feldern markiert.`;
+  statusEl.textContent = `Fertig – ${aboveVals.length} von ${cells.length} Feldern markiert.`;
 }
 
 refreshBtn.addEventListener("click", refresh);
