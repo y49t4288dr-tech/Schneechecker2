@@ -24,8 +24,18 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
-  // Nur eigene Dateien aus dem Cache bedienen; alles andere (Kacheln, API) live.
-  if (url.origin === location.origin) {
-    e.respondWith(caches.match(e.request).then((r) => r || fetch(e.request)));
+  if (url.origin !== location.origin) return;   // Kacheln, API, Suche: immer live
+
+  // Seite selbst (Navigation): erst Netz, bei Offline aus dem Cache.
+  // So kommen neue Versionen sofort durch, offline funktioniert es trotzdem.
+  if (e.request.mode === "navigate") {
+    e.respondWith(
+      fetch(e.request)
+        .then((r) => { caches.open(CACHE).then((c) => c.put("./index.html", r.clone())); return r; })
+        .catch(() => caches.match("./index.html"))
+    );
+    return;
   }
+  // Übrige eigene Dateien (Icons, Manifest): erst Cache, sonst Netz.
+  e.respondWith(caches.match(e.request).then((r) => r || fetch(e.request)));
 });
