@@ -39,7 +39,11 @@ Funktionen der Web-Version:
 - **Ortssuche:** Suchfeld für Orte (über Nominatim/OpenStreetMap).
 - **Als App installierbar (PWA):** eigenes Icon, „Zum Home-Bildschirm
   hinzufügen", startet wie eine App.
-- Einstellungen (Modus, Schwelle, Auflösung) werden gemerkt; wackliges Netz wird
+- **Quadratische Kästchen mit einstellbarer Feinheit** auf einem festen
+  Projektionsraster. Weil die Messpunkte einrasten, werden beim Verschieben
+  schon geladene Punkte aus dem Cache genutzt statt neu abgefragt – zusammen mit
+  großen Anfrage-Paketen und einer Obergrenze schont das die Datenquelle.
+- Einstellungen (Modus, Schwelle, Feinheit) werden gemerkt; wackliges Netz wird
   mit einem Wiederholversuch abgefangen.
 
 **Öffnen auf dem Handy – am einfachsten über GitHub Pages (kostenlos):**

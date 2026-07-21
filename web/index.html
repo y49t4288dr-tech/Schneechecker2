@@ -115,8 +115,8 @@
     <div class="section" id="threshold-label">Schwelle: 1500 m</div>
     <input type="range" id="threshold" min="0" max="4000" step="50" value="1500">
 
-    <div class="section" id="resolution-label">Auflösung: 10 × 10</div>
-    <input type="range" id="resolution" min="4" max="18" step="1" value="10">
+    <div class="section" id="resolution-label">Feinheit: 3 / 6</div>
+    <input type="range" id="resolution" min="1" max="6" step="1" value="3">
 
     <button id="refresh">Aktualisieren</button>
 
@@ -249,7 +249,7 @@ document.querySelectorAll(".modes button").forEach((b) =>
   b.addEventListener("click", () => applyMode(b.dataset.mode)));
 thresholdEl.addEventListener("input", updateThresholdLabel);
 resolutionEl.addEventListener("input", () => {
-  resolutionLbl.textContent = `Auflösung: ${resolutionEl.value} × ${resolutionEl.value}`;
+  resolutionLbl.textContent = `Feinheit: ${resolutionEl.value} / 6`;
   saveSettings();
 });
 
@@ -318,18 +318,40 @@ async function fetchValues(points) {
   return entries.map((e) => (e.current && e.current.snow_depth != null) ? e.current.snow_depth * 100 : null);
 }
 
-function buildGrid(bounds, n) {
-  const latMin = bounds.getSouth(), latMax = bounds.getNorth();
-  const lonMin = bounds.getWest(),  lonMax = bounds.getEast();
-  const latStep = (latMax - latMin) / n, lonStep = (lonMax - lonMin) / n;
+// Feinheit-Stufe -> Kästchengröße in Karten-Pixeln (kleiner = feiner).
+const STEP_PX = [64, 52, 42, 34, 26, 20];
+const SAMPLE_MAX_CELLS = 500;   // Obergrenze, damit nicht zu viele Punkte abgefragt werden
+function currentStep() { return STEP_PX[Number(resolutionEl.value) - 1] || 42; }
+
+// Quadratisches Gitter auf einem FESTEN Raster der Kartenprojektion.
+// Weil die Punkte an feste Rasterlinien einrasten, liegen beim Verschieben
+// viele Punkte auf denselben Stellen -> sie kommen aus dem Cache statt neu
+// abgefragt zu werden. Die Kästchen sind in der Projektion quadratisch und
+// erscheinen daher auf dem Bildschirm als Quadrate.
+function buildSquareGrid() {
+  const SZ = map.getZoom();
+  let step = currentStep();
+  const b = map.getBounds();
+  const pNW = map.project(b.getNorthWest(), SZ);
+  const pSE = map.project(b.getSouthEast(), SZ);
+  const w = pSE.x - pNW.x, h = pSE.y - pNW.y;
+  let coarsened = false;
+  while ((w / step) * (h / step) > SAMPLE_MAX_CELLS) { step *= 1.4; coarsened = true; }
+
+  const x0 = Math.floor(pNW.x / step) * step, x1 = Math.ceil(pSE.x / step) * step;
+  const y0 = Math.floor(pNW.y / step) * step, y1 = Math.ceil(pSE.y / step) * step;
   const cells = [];
-  for (let r = 0; r < n; r++)
-    for (let c = 0; c < n; c++) {
-      const lat0 = latMin + r * latStep, lat1 = lat0 + latStep;
-      const lon0 = lonMin + c * lonStep, lon1 = lon0 + lonStep;
-      cells.push({ r, c, lat0, lon0, lat1, lon1, cLat: (lat0 + lat1) / 2, cLon: (lon0 + lon1) / 2, value: null });
+  for (let y = y0; y < y1 - 1e-6; y += step)
+    for (let x = x0; x < x1 - 1e-6; x += step) {
+      const nw = map.unproject([x, y], SZ);
+      const se = map.unproject([x + step, y + step], SZ);
+      const ctr = map.unproject([x + step / 2, y + step / 2], SZ);
+      cells.push({
+        lat0: se.lat, lat1: nw.lat, lon0: nw.lng, lon1: se.lng,
+        cLat: ctr.lat, cLon: ctr.lng, value: null
+      });
     }
-  return cells;
+  return { cells, coarsened };
 }
 
 async function refresh() {
@@ -338,28 +360,27 @@ async function refresh() {
   refreshBtn.disabled = true; refreshBtn.textContent = "Lädt …";
   barFill.style.width = "0%"; statusEl.textContent = "Daten werden geladen …";
 
-  const n = Number(resolutionEl.value);
   const threshold = Number(thresholdEl.value);
-  const bounds = map.getBounds();
-  const cells = buildGrid(bounds, n);
+  const { cells, coarsened } = buildSquareGrid();
   const missing = cells.filter((c) => cache[key(c.cLat, c.cLon)] === undefined);
   const total = cells.length;
   let done = total - missing.length;
-  const setP = () => barFill.style.width = `${Math.round(done / total * 100)}%`;
+  const setP = () => barFill.style.width = `${total ? Math.round(done / total * 100) : 0}%`;
   setP();
 
-  const BATCH = mode === "hoehe" ? 100 : 50;
+  const BATCH = 100;   // große Pakete -> möglichst wenige Anfragen
   try {
     for (let i = 0; i < missing.length; i += BATCH) {
       const chunk = missing.slice(i, i + BATCH);
       const values = await fetchValues(chunk.map((c) => [c.cLat, c.cLon]));
       chunk.forEach((c, idx) => { cache[key(c.cLat, c.cLon)] = values[idx]; });
       done += chunk.length; setP();
-      statusEl.textContent = `Daten werden geladen … ${done}/${total}`;
+      statusEl.textContent = `Daten werden geladen … ${done}/${total} (${missing.length} neu)`;
       if (i + BATCH < missing.length) await sleep(250);
     }
     cells.forEach((c) => { c.value = cache[key(c.cLat, c.cLon)]; });
-    draw(cells, threshold, bounds, n);
+    draw(cells, threshold);
+    if (coarsened) statusEl.textContent += " · Kästchen vergröbert – zum Verfeinern hineinzoomen.";
   } catch (err) {
     statusEl.textContent = "Fehler beim Laden: " + err.message;
   } finally {
@@ -381,42 +402,26 @@ function ramp(stops, t) {
   ];
 }
 
-function draw(cells, threshold, bounds, n) {
+function draw(cells, threshold) {
   overlay.clearLayers();
   lastCells = cells;
   const m = MODES[mode];
-  const aboveVals = cells.filter((c) => c.value != null && c.value >= threshold).map((c) => c.value);
-  const maxVal = aboveVals.reduce((mx, v) => Math.max(mx, v), threshold);
+  const above = cells.filter((c) => c.value != null && c.value >= threshold);
+  const maxVal = above.reduce((mx, c) => Math.max(mx, c.value), threshold);
   const scaleMax = maxVal > threshold ? maxVal : threshold + 1;
 
-  // 1) Kleines n×n-Bild: eine Zelle = ein Pixel, Farbe + Deckkraft nach Wert.
-  const base = document.createElement("canvas");
-  base.width = n; base.height = n;
-  const bctx = base.getContext("2d");
-  const idata = bctx.createImageData(n, n);
-  for (const c of cells) {
-    const y = (n - 1 - c.r), x = c.c, idx = (y * n + x) * 4;   // Bild: oben = Norden
-    if (c.value == null || c.value < threshold) { idata.data[idx + 3] = 0; continue; }
+  // Jedes Kästchen als eigenes Quadrat, eingefärbt nach der Farbskala.
+  for (const c of above) {
     const t = (c.value - threshold) / (scaleMax - threshold);
     const col = ramp(m.grad, t);
-    idata.data[idx] = col[0]; idata.data[idx + 1] = col[1]; idata.data[idx + 2] = col[2];
-    idata.data[idx + 3] = Math.round((0.5 + 0.35 * t) * 255);   // dichter bei hohen Werten
+    L.rectangle([[c.lat0, c.lon0], [c.lat1, c.lon1]], {
+      stroke: true, color: "rgba(255,255,255,0.25)", weight: 0.5,
+      fillColor: `rgb(${col[0]},${col[1]},${col[2]})`, fillOpacity: 0.62, interactive: false
+    }).addTo(overlay);
   }
-  bctx.putImageData(idata, 0, 0);
-
-  // 2) Weich hochskalieren -> stufenloser Verlauf statt harter Kacheln.
-  const k = Math.max(1, Math.round(340 / n));
-  const big = document.createElement("canvas");
-  big.width = n * k; big.height = n * k;
-  const gctx = big.getContext("2d");
-  gctx.imageSmoothingEnabled = true; gctx.imageSmoothingQuality = "high";
-  gctx.drawImage(base, 0, 0, big.width, big.height);
-
-  L.imageOverlay(big.toDataURL(), bounds, { opacity: 1, interactive: false }).addTo(overlay);
-
   barFill.style.width = "100%";
   updateLegend(threshold, scaleMax);
-  statusEl.textContent = `Fertig – ${aboveVals.length} von ${cells.length} Feldern markiert.`;
+  statusEl.textContent = `Fertig – ${above.length} von ${cells.length} Feldern markiert.`;
 }
 
 refreshBtn.addEventListener("click", refresh);
@@ -424,7 +429,7 @@ refreshBtn.addEventListener("click", refresh);
 // ---- Start ------------------------------------------------------------------
 loadSettings();
 applyMode(mode);
-resolutionLbl.textContent = `Auflösung: ${resolutionEl.value} × ${resolutionEl.value}`;
+resolutionLbl.textContent = `Feinheit: ${resolutionEl.value} / 6`;
 
 // Service Worker registrieren (für App-Installation)
 if ("serviceWorker" in navigator) {
