@@ -154,10 +154,10 @@
   <h1>Farb-Reaktion</h1>
   <p>Trainiere deine Reaktion mit dem Farb-Trick (Stroop-Effekt). Vier Felder, jedes mit
      eigener Farbe und einem Farb-Wort – die passen absichtlich nicht zusammen.</p>
-  <p><b>Aufgabe oben in&nbsp;<span style="color:#fff">Schwarz</span></b> → tippe das Feld,
+  <p><b>Aufgabe oben in&nbsp;<span style="color:#fff">Weiß/Schwarz</span></b> → tippe das Feld,
      das diese <b>Farbe hat</b>.<br>
-     <b>Aufgabe in Farbe</b> → tippe das Feld, dessen <b>Text</b> genau
-     diese <b>Farbe als Namen</b> trägt (das Wort ist egal!).</p>
+     <b>Aufgabe in Farbe</b> → tippe das Feld, auf dem <b>genau dieses Wort</b>
+     steht (die Farbe ist egal!).</p>
   <div class="examples">
     <span style="color:#000;background:#eee">ROT</span>
     <span style="color:#2ea3ff">GELB</span>
@@ -272,16 +272,16 @@
       ruleEl.textContent = "Tippe das Feld mit dieser Farbe";
       correctIndex = cells.findIndex(c => c.bgKey === target.key);
     } else {
-      // FARBIG: tippe Feld, dessen TEXT diese Farbe als Namen hat.
-      // Tintenfarbe = einer der vorhandenen Textnamen.
-      const inkTarget = byKey[textKeys[Math.floor(Math.random() * 4)]];
-      // Wort selbst: ein anderer Name (Ablenkung), nie gleich der Tinte
-      const wordChoices = COLORS.filter(c => c.key !== inkTarget.key);
-      const wordShown = wordChoices[Math.floor(Math.random() * wordChoices.length)];
-      wordEl.textContent = wordShown.key;
-      wordEl.style.color = inkTarget.css;
-      ruleEl.textContent = "Tippe das Feld mit diesem Farbnamen (Wort egal!)";
-      correctIndex = cells.findIndex(c => c.textKey === inkTarget.key);
+      // FARBIG: das Wort ist in einer Farbe geschrieben. Tippe das Feld, auf
+      // dem GENAU DIESES WORT steht – die Buchstaben zählen, die Farbe ist egal.
+      const targetWord = byKey[textKeys[Math.floor(Math.random() * 4)]];
+      // Tintenfarbe: irgendeine andere Farbe als das Wort selbst (Ablenkung).
+      const inkChoices = COLORS.filter(c => c.key !== targetWord.key);
+      const ink = inkChoices[Math.floor(Math.random() * inkChoices.length)];
+      wordEl.textContent = targetWord.key;
+      wordEl.style.color = ink.css;
+      ruleEl.textContent = "Tippe das Feld mit genau diesem Wort";
+      correctIndex = cells.findIndex(c => c.textKey === targetWord.key);
     }
 
     promptBox.classList.remove("good", "bad");
