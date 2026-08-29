@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f1220">
+<title>Farb-Reaktion</title>
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --bg: #0f1220;
+    --panel: #1a1f36;
+    --panel-2: #232a4a;
+    --text: #f2f4ff;
+    --muted: #9aa3c7;
+    --good: #3ddc84;
+    --bad: #ff5470;
+    --gap: 10px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none; user-select: none; -webkit-user-select: none;
+  }
+  #app {
+    height: 100%;
+    display: flex; flex-direction: column;
+    padding: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom)) 10px;
+    gap: var(--gap);
+    max-width: 640px; margin: 0 auto;
+  }
+
+  /* ---- Kopfzeile mit Statistik ---- */
+  .stats {
+    display: flex; gap: var(--gap);
+    justify-content: space-between;
+  }
+  .stat {
+    flex: 1; background: var(--panel); border-radius: 14px;
+    padding: 8px 6px; text-align: center;
+  }
+  .stat .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .stat .value { font-size: 20px; font-weight: 700; margin-top: 2px; }
+
+  /* ---- Aufgabenfeld oben ---- */
+  .prompt {
+    background: var(--panel); border-radius: 18px;
+    padding: 14px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 96px;
+    transition: background .15s;
+  }
+  .prompt.good { background: #16351f; }
+  .prompt.bad  { background: #3a1622; }
+  .prompt .rule { font-size: 13px; color: var(--muted); margin-bottom: 4px; min-height: 16px; }
+  .prompt .word {
+    font-size: clamp(34px, 11vw, 60px); font-weight: 800; line-height: 1;
+    letter-spacing: 1px;
+  }
+
+  /* ---- Spielfeld: 2x2 ---- */
+  .grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: var(--gap);
+    min-height: 0;
+  }
+  .cell {
+    border-radius: 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(26px, 8vw, 46px); font-weight: 800;
+    letter-spacing: 1px; cursor: pointer;
+    border: none; padding: 6px;
+    /* Text auf jedem Hintergrund lesbar halten */
+    text-shadow: 0 1px 2px rgba(0,0,0,.55), 0 0 3px rgba(0,0,0,.35);
+    transition: transform .05s;
+    position: relative; overflow: hidden;
+  }
+  .cell:active { transform: scale(.97); }
+
+  /* ---- Fußzeile / Buttons ---- */
+  .footer { display: flex; gap: var(--gap); align-items: center; }
+  button.ctrl {
+    flex: 1; background: var(--panel-2); color: var(--text);
+    border: none; border-radius: 14px; padding: 14px;
+    font-size: 16px; font-weight: 600; cursor: pointer;
+  }
+  button.ctrl:active { background: var(--panel); }
+  button.ctrl.primary { background: var(--good); color: #04210f; }
+
+  /* ---- Overlay (Start / Game Over) ---- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10;
+    background: rgba(6,8,18,.94);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 24px; gap: 14px;
+  }
+  .overlay h1 { font-size: 30px; margin: 0; }
+  .overlay p { color: var(--muted); max-width: 460px; margin: 0; line-height: 1.5; font-size: 15px; }
+  .overlay .big { font-size: 46px; font-weight: 800; margin: 4px 0; }
+  .overlay button {
+    background: var(--good); color: #04210f; border: none;
+    border-radius: 16px; padding: 16px 40px; font-size: 20px; font-weight: 800;
+    cursor: pointer; margin-top: 6px;
+  }
+  .overlay .examples { display: flex; gap: 10px; margin: 6px 0; }
+  .overlay .examples span {
+    background: var(--panel); padding: 10px 14px; border-radius: 12px;
+    font-weight: 800; font-size: 22px;
+  }
+  .hidden { display: none !important; }
+
+  .timerbar-wrap { height: 8px; background: var(--panel); border-radius: 6px; overflow: hidden; }
+  .timerbar { height: 100%; width: 100%; background: var(--good); transition: width .1s linear; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="stats">
+    <div class="stat"><div class="label">Punkte</div><div class="value" id="score">0</div></div>
+    <div class="stat"><div class="label">Serie</div><div class="value" id="streak">0</div></div>
+    <div class="stat"><div class="label">Reaktion</div><div class="value" id="rt">–</div></div>
+    <div class="stat"><div class="label">Bestzeit</div><div class="value" id="best">–</div></div>
+  </div>
+
+  <div class="prompt" id="prompt">
+    <div class="rule" id="rule"></div>
+    <div class="word" id="word">Bereit?</div>
+  </div>
+
+  <div class="timerbar-wrap"><div class="timerbar" id="timerbar"></div></div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="footer">
+    <button class="ctrl" id="pauseBtn">Pause</button>
+    <button class="ctrl" id="restartBtn">Neu</button>
+  </div>
+</div>
+
+<!-- Startbildschirm -->
+<div class="overlay" id="startOverlay">
+  <h1>Farb-Reaktion</h1>
+  <p>Trainiere deine Reaktion mit dem Farb-Trick (Stroop-Effekt). Vier Felder, jedes mit
+     eigener Farbe und einem Farb-Wort – die passen absichtlich nicht zusammen.</p>
+  <p><b>Aufgabe oben in&nbsp;<span style="color:#fff">Schwarz</span></b> → tippe das Feld,
+     das diese <b>Farbe hat</b>.<br>
+     <b>Aufgabe in Farbe</b> → tippe das Feld, dessen <b>Text</b> genau
+     diese <b>Farbe als Namen</b> trägt (das Wort ist egal!).</p>
+  <div class="examples">
+    <span style="color:#000;background:#eee">ROT</span>
+    <span style="color:#2ea3ff">GELB</span>
+  </div>
+  <p style="font-size:13px">Du hast pro Runde ein paar Sekunden. Ein Fehler oder Zeit abgelaufen = vorbei.</p>
+  <button id="startBtn">Start</button>
+</div>
+
+<!-- Game Over -->
+<div class="overlay hidden" id="overOverlay">
+  <h1 id="overTitle">Vorbei!</h1>
+  <div class="big" id="overScore">0</div>
+  <p id="overMsg"></p>
+  <button id="againBtn">Nochmal</button>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- Farbdefinition ----
+  const COLORS = [
+    { key: "ROT",  css: "#e23b3b", name: "Rot"  },
+    { key: "GELB", css: "#e8c33a", name: "Gelb" },
+    { key: "GRÜN", css: "#35b46a", name: "Grün" },
+    { key: "BLAU", css: "#3d7be8", name: "Blau" },
+  ];
+  const byKey = Object.fromEntries(COLORS.map(c => [c.key, c]));
+
+  // ---- DOM ----
+  const el = id => document.getElementById(id);
+  const grid = el("grid");
+  const promptBox = el("prompt");
+  const wordEl = el("word");
+  const ruleEl = el("rule");
+  const scoreEl = el("score"), streakEl = el("streak"), rtEl = el("rt"), bestEl = el("best");
+  const timerbar = el("timerbar");
+
+  // ---- Zustand ----
+  let cells = [];           // { btn, bgKey, textKey }
+  let correctIndex = -1;    // Index des richtigen Feldes
+  let roundStart = 0;
+  let score = 0, streak = 0, best = null;
+  let running = false, paused = false;
+  let roundTimer = null, rafId = null, roundDeadline = 0, roundDuration = 0;
+
+  // Zeitlimit wird mit der Punktzahl schrittweise kürzer (min 1.4s)
+  function limitForScore(s) {
+    return Math.max(1400, 3200 - s * 45);
+  }
+
+  // Fisher-Yates
+  function shuffled(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  // Derangement: name[i] != bg[i] (Stroop – Text nie gleich Hintergrund)
+  function derangedNames(bgKeys) {
+    const keys = COLORS.map(c => c.key);
+    for (let tries = 0; tries < 50; tries++) {
+      const names = shuffled(keys);
+      if (names.every((n, i) => n !== bgKeys[i])) return names;
+    }
+    // Fallback: rotieren
+    return bgKeys.map((_, i) => bgKeys[(i + 1) % bgKeys.length]);
+  }
+
+  function buildCells() {
+    grid.innerHTML = "";
+    cells = [];
+    for (let i = 0; i < 4; i++) {
+      const btn = document.createElement("button");
+      btn.className = "cell";
+      btn.setAttribute("aria-label", "Feld " + (i + 1));
+      btn.addEventListener("click", () => onPick(i));
+      grid.appendChild(btn);
+      cells.push({ btn, bgKey: null, textKey: null });
+    }
+  }
+
+  function newRound() {
+    // Hintergründe & Textnamen: je eine zufällige Permutation der 4 Farben
+    const bgKeys = shuffled(COLORS.map(c => c.key));
+    const textKeys = derangedNames(bgKeys);
+
+    for (let i = 0; i < 4; i++) {
+      const bg = byKey[bgKeys[i]];
+      const txt = byKey[textKeys[i]];
+      // Textfarbe: eine Farbe, die weder Hintergrund noch Wortbedeutung ist,
+      // damit alles schön durcheinander ist.
+      const inkChoices = COLORS.filter(c => c.key !== bgKeys[i] && c.key !== textKeys[i]);
+      const ink = inkChoices[Math.floor(Math.random() * inkChoices.length)];
+      cells[i].bgKey = bgKeys[i];
+      cells[i].textKey = textKeys[i];
+      cells[i].btn.style.background = bg.css;
+      cells[i].btn.style.color = ink.css;
+      cells[i].btn.textContent = txt.key;
+    }
+
+    // Aufgabe: Modus wählen
+    const modeColor = Math.random() < 0.5; // true = Aufgabe farbig
+    if (!modeColor) {
+      // SCHWARZ: tippe Feld mit dieser HINTERGRUND-Farbe
+      const target = byKey[bgKeys[Math.floor(Math.random() * 4)]];
+      wordEl.textContent = target.key;
+      wordEl.style.color = "#ffffff";
+      ruleEl.textContent = "Tippe das Feld mit dieser Farbe";
+      correctIndex = cells.findIndex(c => c.bgKey === target.key);
+    } else {
+      // FARBIG: tippe Feld, dessen TEXT diese Farbe als Namen hat.
+      // Tintenfarbe = einer der vorhandenen Textnamen.
+      const inkTarget = byKey[textKeys[Math.floor(Math.random() * 4)]];
+      // Wort selbst: ein anderer Name (Ablenkung), nie gleich der Tinte
+      const wordChoices = COLORS.filter(c => c.key !== inkTarget.key);
+      const wordShown = wordChoices[Math.floor(Math.random() * wordChoices.length)];
+      wordEl.textContent = wordShown.key;
+      wordEl.style.color = inkTarget.css;
+      ruleEl.textContent = "Tippe das Feld mit diesem Farbnamen (Wort egal!)";
+      correctIndex = cells.findIndex(c => c.textKey === inkTarget.key);
+    }
+
+    promptBox.classList.remove("good", "bad");
+    roundStart = performance.now();
+    startRoundTimer();
+  }
+
+  function startRoundTimer() {
+    clearRoundTimer();
+    roundDuration = limitForScore(score);
+    roundDeadline = performance.now() + roundDuration;
+    tickBar();
+    roundTimer = setTimeout(() => timeUp(), roundDuration);
+  }
+
+  function tickBar() {
+    const left = roundDeadline - performance.now();
+    const frac = Math.max(0, left / roundDuration);
+    timerbar.style.width = (frac * 100) + "%";
+    timerbar.style.background = frac < 0.3 ? "var(--bad)" : (frac < 0.6 ? "var(--good)" : "var(--good)");
+    if (running && !paused && left > 0) {
+      rafId = requestAnimationFrame(tickBar);
+    }
+  }
+
+  function clearRoundTimer() {
+    if (roundTimer) { clearTimeout(roundTimer); roundTimer = null; }
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  }
+
+  function onPick(i) {
+    if (!running || paused) return;
+    if (i === correctIndex) {
+      const rt = Math.round(performance.now() - roundStart);
+      clearRoundTimer();
+      score++; streak++;
+      rtEl.textContent = rt + " ms";
+      if (best === null || rt < best) { best = rt; bestEl.textContent = best + " ms"; }
+      scoreEl.textContent = score; streakEl.textContent = streak;
+      promptBox.classList.remove("bad"); promptBox.classList.add("good");
+      // kurze grüne Rückmeldung, dann nächste Runde
+      setTimeout(() => { if (running && !paused) newRound(); }, 90);
+    } else {
+      gameOver("Falsches Feld!");
+    }
+  }
+
+  function timeUp() {
+    gameOver("Zeit abgelaufen!");
+  }
+
+  // ---- Ablaufsteuerung ----
+  function startGame() {
+    score = 0; streak = 0; best = null;
+    scoreEl.textContent = "0"; streakEl.textContent = "0";
+    rtEl.textContent = "–"; bestEl.textContent = "–";
+    running = true; paused = false;
+    el("pauseBtn").textContent = "Pause";
+    el("startOverlay").classList.add("hidden");
+    el("overOverlay").classList.add("hidden");
+    buildCells();
+    newRound();
+  }
+
+  function gameOver(reason) {
+    running = false;
+    clearRoundTimer();
+    promptBox.classList.add("bad");
+    el("overTitle").textContent = reason;
+    el("overScore").textContent = score + (score === 1 ? " Punkt" : " Punkte");
+    el("overMsg").textContent = best !== null
+      ? ("Beste Reaktion: " + best + " ms · längste Serie ging bis " + streak + ".")
+      : "Kein Treffer – probier's nochmal!";
+    el("overOverlay").classList.remove("hidden");
+  }
+
+  function togglePause() {
+    if (!running) return;
+    paused = !paused;
+    el("pauseBtn").textContent = paused ? "Weiter" : "Pause";
+    if (paused) {
+      clearRoundTimer();
+      wordEl.dataset.saved = wordEl.textContent;
+      ruleEl.textContent = "Pausiert";
+    } else {
+      // Runde neu starten (fair – kein Zeitvorteil durch Pause)
+      newRound();
+    }
+  }
+
+  // ---- Buttons ----
+  el("startBtn").addEventListener("click", startGame);
+  el("againBtn").addEventListener("click", startGame);
+  el("restartBtn").addEventListener("click", startGame);
+  el("pauseBtn").addEventListener("click", togglePause);
+
+  // Sichtbarkeit: bei Verlassen automatisch pausieren
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && running && !paused) togglePause();
+  });
+
+  buildCells();
+})();
+</script>
+</body>
+</html>
