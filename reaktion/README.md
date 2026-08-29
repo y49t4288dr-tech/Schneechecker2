@@ -7,8 +7,29 @@ antippen.
 ## Starten
 
 Einfach [`index.html`](index.html) im Browser öffnen – funktioniert am Rechner
-**und am Handy**, ohne Installation. Am Handy kann man die Seite über
-„Zum Home-Bildschirm hinzufügen" wie eine App ablegen.
+**und am Handy**, ohne Installation.
+
+## Als App aufs Handy (PWA)
+
+Die App ist – genau wie der Schnee-Checker – eine **PWA**: eigenes Icon, startet
+wie eine echte App und läuft auch offline. Am einfachsten über **GitHub Pages**
+(kostenlos):
+
+1. Im GitHub-Repository auf **Settings → Pages** gehen.
+2. Bei *Build and deployment* → *Source* **„Deploy from a branch"** wählen,
+   den gewünschten Branch und Ordner `/root`, speichern.
+3. Nach kurzer Wartezeit zeigt GitHub eine Adresse an, z. B.
+   `https://<benutzername>.github.io/Schneechecker2/reaktion/`.
+4. Diese Adresse auf dem Handy im Browser öffnen und dann:
+   - **iPhone (Safari):** Teilen-Symbol → „Zum Home-Bildschirm".
+   - **Android (Chrome):** Menü ⋮ → „App installieren" bzw.
+     „Zum Startbildschirm hinzufügen".
+
+Danach liegt „Farb-Reaktion" mit eigenem Icon auf dem Handy und startet im
+Vollbild – ohne Browser-Leiste.
+
+> Diese App braucht kein Internet und keine externen Dienste – sie läuft nach dem
+> ersten Laden komplett offline.
 
 ## Spielprinzip
 
