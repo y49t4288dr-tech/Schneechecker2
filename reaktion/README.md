@@ -46,6 +46,15 @@ Jeder Treffer gibt einen Punkt und misst deine Reaktionszeit. Mit steigender
 Punktzahl wird das Zeitlimit pro Runde kürzer. Ein Fehlgriff oder abgelaufene Zeit
 beendet die Runde.
 
+## Menü & Auswertung
+
+- **Hauptmenü:** Beim Start – „Spielen" oder „Auswertung". Während des Spiels
+  kommt man über den Knopf **„Menü"** jederzeit zurück.
+- **Auswertung:** dauerhaft gespeicherte Statistik (im Browser, bleibt erhalten):
+  Rekord-Punkte, gespielte Spiele, schnellste Reaktion, durchschnittliche
+  Reaktion, Treffer gesamt und das letzte Spiel. Mit „Statistik zurücksetzen"
+  lässt sich alles wieder auf null stellen.
+
 ## Farben
 
 Rot · Gelb · Grün · Blau

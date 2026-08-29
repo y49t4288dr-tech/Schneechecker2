@@ -119,6 +119,22 @@
     background: var(--panel); padding: 10px 14px; border-radius: 12px;
     font-weight: 800; font-size: 22px;
   }
+  /* Menü-Knöpfe */
+  .overlay .menu-btns { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 320px; }
+  .overlay .menu-btns button { width: 100%; margin-top: 0; }
+  .overlay button.secondary { background: var(--panel-2); color: var(--text); }
+  .overlay button.ghost { background: transparent; color: var(--muted); font-weight: 600; font-size: 16px; padding: 10px; }
+  /* Statistik-Kacheln in der Auswertung */
+  .overlay .statgrid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    width: 100%; max-width: 380px; margin: 4px 0;
+  }
+  .overlay .statgrid .box {
+    background: var(--panel); border-radius: 14px; padding: 14px 10px;
+  }
+  .overlay .statgrid .box .l { font-size: 12px; color: var(--muted); }
+  .overlay .statgrid .box .v { font-size: 24px; font-weight: 800; margin-top: 4px; }
+  .rulesbox { background: var(--panel); border-radius: 14px; padding: 12px 14px; max-width: 460px; }
   .hidden { display: none !important; }
 
   .timerbar-wrap { height: 8px; background: var(--panel); border-radius: 6px; overflow: hidden; }
@@ -145,25 +161,47 @@
 
   <div class="footer">
     <button class="ctrl" id="pauseBtn">Pause</button>
-    <button class="ctrl" id="restartBtn">Neu</button>
+    <button class="ctrl" id="restartBtn">Menü</button>
   </div>
 </div>
 
-<!-- Startbildschirm -->
-<div class="overlay" id="startOverlay">
+<!-- Hauptmenü -->
+<div class="overlay" id="menuOverlay">
   <h1>Farb-Reaktion</h1>
-  <p>Trainiere deine Reaktion mit dem Farb-Trick (Stroop-Effekt). Vier Felder, jedes mit
-     eigener Farbe und einem Farb-Wort – die passen absichtlich nicht zusammen.</p>
-  <p><b>Aufgabe oben in&nbsp;<span style="color:#fff">Weiß/Schwarz</span></b> → tippe das Feld,
-     das diese <b>Farbe hat</b>.<br>
-     <b>Aufgabe in Farbe</b> → tippe das Feld, auf dem <b>genau dieses Wort</b>
-     steht (die Farbe ist egal!).</p>
+  <div class="rulesbox">
+    <p><b>Aufgabe in&nbsp;<span style="color:#fff">Weiß/Schwarz</span></b> → tippe das Feld,
+       das diese <b>Farbe hat</b>.<br>
+       <b>Aufgabe in Farbe</b> → tippe das Feld, auf dem <b>genau dieses Wort</b>
+       steht (die Farbe ist egal!).</p>
+  </div>
   <div class="examples">
     <span style="color:#000;background:#eee">ROT</span>
     <span style="color:#2ea3ff">GELB</span>
   </div>
-  <p style="font-size:13px">Du hast pro Runde ein paar Sekunden. Ein Fehler oder Zeit abgelaufen = vorbei.</p>
-  <button id="startBtn">Start</button>
+  <div class="menu-btns">
+    <button id="startBtn">Spielen</button>
+    <button id="statsBtn" class="secondary">Auswertung</button>
+  </div>
+  <p style="font-size:13px">Pro Runde hast du ein paar Sekunden – mit jedem Punkt weniger.
+     Ein Fehler oder Zeit abgelaufen = vorbei.</p>
+</div>
+
+<!-- Auswertung -->
+<div class="overlay hidden" id="statsOverlay">
+  <h1>Auswertung</h1>
+  <div class="statgrid">
+    <div class="box"><div class="l">Rekord-Punkte</div><div class="v" id="stRecord">0</div></div>
+    <div class="box"><div class="l">Gespielte Spiele</div><div class="v" id="stGames">0</div></div>
+    <div class="box"><div class="l">Schnellste Reaktion</div><div class="v" id="stBest">–</div></div>
+    <div class="box"><div class="l">Ø Reaktion</div><div class="v" id="stAvg">–</div></div>
+    <div class="box"><div class="l">Treffer gesamt</div><div class="v" id="stHits">0</div></div>
+    <div class="box"><div class="l">Letztes Spiel</div><div class="v" id="stLast">–</div></div>
+  </div>
+  <div class="menu-btns">
+    <button id="statsPlayBtn">Spielen</button>
+    <button id="statsBackBtn" class="secondary">Zurück zum Menü</button>
+    <button id="statsResetBtn" class="ghost">Statistik zurücksetzen</button>
+  </div>
 </div>
 
 <!-- Game Over -->
@@ -171,7 +209,11 @@
   <h1 id="overTitle">Vorbei!</h1>
   <div class="big" id="overScore">0</div>
   <p id="overMsg"></p>
-  <button id="againBtn">Nochmal</button>
+  <div class="menu-btns">
+    <button id="againBtn">Nochmal</button>
+    <button id="overStatsBtn" class="secondary">Auswertung</button>
+    <button id="overMenuBtn" class="ghost">Hauptmenü</button>
+  </div>
 </div>
 
 <script>
@@ -203,6 +245,22 @@
   let score = 0, streak = 0, best = null;
   let running = false, paused = false;
   let roundTimer = null, rafId = null, roundDeadline = 0, roundDuration = 0;
+  let rtList = [];          // Reaktionszeiten der laufenden Runde
+
+  // ---- Dauerhafte Statistik (localStorage) ----
+  const STATS_KEY = "farb-reaktion-stats-v1";
+  function loadStats() {
+    const empty = { games: 0, record: 0, bestRt: null, totalHits: 0, totalRtSum: 0, lastScore: null, lastAvg: null };
+    try {
+      const s = JSON.parse(localStorage.getItem(STATS_KEY));
+      return s && typeof s === "object" ? Object.assign(empty, s) : empty;
+    } catch (e) { return empty; }
+  }
+  function saveStats() {
+    try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (e) {}
+  }
+  let stats = loadStats();
+  const fmtMs = v => (v === null || v === undefined) ? "–" : Math.round(v) + " ms";
 
   // Zeitlimit wird mit der Punktzahl schrittweise kürzer (min 1.4s)
   function limitForScore(s) {
@@ -318,6 +376,7 @@
       const rt = Math.round(performance.now() - roundStart);
       clearRoundTimer();
       score++; streak++;
+      rtList.push(rt);
       rtEl.textContent = rt + " ms";
       if (best === null || rt < best) { best = rt; bestEl.textContent = best + " ms"; }
       scoreEl.textContent = score; streakEl.textContent = streak;
@@ -333,15 +392,48 @@
     gameOver("Zeit abgelaufen!");
   }
 
+  // ---- Overlay-Helfer ----
+  function hideOverlays() {
+    el("menuOverlay").classList.add("hidden");
+    el("statsOverlay").classList.add("hidden");
+    el("overOverlay").classList.add("hidden");
+  }
+
+  function showMenu() {
+    running = false; paused = false;
+    clearRoundTimer();
+    hideOverlays();
+    el("menuOverlay").classList.remove("hidden");
+  }
+
+  function showStats() {
+    // Kacheln aus der gespeicherten Statistik füllen
+    el("stRecord").textContent = stats.record;
+    el("stGames").textContent = stats.games;
+    el("stBest").textContent = fmtMs(stats.bestRt);
+    el("stAvg").textContent = stats.totalHits > 0 ? fmtMs(stats.totalRtSum / stats.totalHits) : "–";
+    el("stHits").textContent = stats.totalHits;
+    el("stLast").textContent = stats.lastScore === null
+      ? "–"
+      : stats.lastScore + (stats.lastAvg !== null ? " · Ø " + fmtMs(stats.lastAvg) : "");
+    hideOverlays();
+    el("statsOverlay").classList.remove("hidden");
+  }
+
+  function resetStats() {
+    stats = { games: 0, record: 0, bestRt: null, totalHits: 0, totalRtSum: 0, lastScore: null, lastAvg: null };
+    saveStats();
+    showStats();
+  }
+
   // ---- Ablaufsteuerung ----
   function startGame() {
-    score = 0; streak = 0; best = null;
+    score = 0; streak = 0; best = null; rtList = [];
     scoreEl.textContent = "0"; streakEl.textContent = "0";
     rtEl.textContent = "–"; bestEl.textContent = "–";
     running = true; paused = false;
     el("pauseBtn").textContent = "Pause";
-    el("startOverlay").classList.add("hidden");
-    el("overOverlay").classList.add("hidden");
+    hideOverlays();
     buildCells();
     newRound();
   }
@@ -350,11 +442,27 @@
     running = false;
     clearRoundTimer();
     promptBox.classList.add("bad");
+
+    // Statistik aktualisieren und dauerhaft speichern
+    const hits = rtList.length;
+    const sum = rtList.reduce((a, b) => a + b, 0);
+    const avg = hits > 0 ? sum / hits : null;
+    stats.games += 1;
+    if (score > stats.record) stats.record = score;
+    if (best !== null && (stats.bestRt === null || best < stats.bestRt)) stats.bestRt = best;
+    stats.totalHits += hits;
+    stats.totalRtSum += sum;
+    stats.lastScore = score;
+    stats.lastAvg = avg;
+    saveStats();
+
+    const isRecord = score > 0 && score >= stats.record;
     el("overTitle").textContent = reason;
     el("overScore").textContent = score + (score === 1 ? " Punkt" : " Punkte");
     el("overMsg").textContent = best !== null
-      ? ("Beste Reaktion: " + best + " ms · längste Serie ging bis " + streak + ".")
+      ? ((isRecord ? "🏆 Neuer Rekord! " : "") + "Beste Reaktion: " + best + " ms · Ø " + fmtMs(avg) + ".")
       : "Kein Treffer – probier's nochmal!";
+    hideOverlays();
     el("overOverlay").classList.remove("hidden");
   }
 
@@ -373,9 +481,19 @@
   }
 
   // ---- Buttons ----
+  // Hauptmenü
   el("startBtn").addEventListener("click", startGame);
+  el("statsBtn").addEventListener("click", showStats);
+  // Auswertung
+  el("statsPlayBtn").addEventListener("click", startGame);
+  el("statsBackBtn").addEventListener("click", showMenu);
+  el("statsResetBtn").addEventListener("click", resetStats);
+  // Game Over
   el("againBtn").addEventListener("click", startGame);
-  el("restartBtn").addEventListener("click", startGame);
+  el("overStatsBtn").addEventListener("click", showStats);
+  el("overMenuBtn").addEventListener("click", showMenu);
+  // Spielleiste
+  el("restartBtn").addEventListener("click", showMenu);
   el("pauseBtn").addEventListener("click", togglePause);
 
   // Sichtbarkeit: bei Verlassen automatisch pausieren
