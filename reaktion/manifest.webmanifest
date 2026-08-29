@@ -1,0 +1,10 @@
+{
+  "name": "Farb-Reaktion",
+  "short_name": "Farb-Reaktion",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1220",
+  "theme_color": "#0f1220",
+  "icons": []
+}
